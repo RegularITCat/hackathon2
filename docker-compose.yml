@@ -1,0 +1,33 @@
+version: "3.7"
+
+services:
+    flask:
+        build: ./src
+        restart: always
+        environment:
+            - APP_NAME=Tour.Hack2020_case5_backend
+            - FLASK_APP=app.py
+        expose:
+            - "80:80"
+        depends_on:
+            - db
+
+    db:
+        image: postgres
+        restart: always
+        environment:
+            POSTGRES_PASSWORD: adminer
+            POSTGRES_USER: adminer
+            POSTGRES_DB: adminer
+
+    adminer:
+        image: adminer
+        restart: always
+        ports:
+            - 8080:8080
+        environment:
+            ADMINER_DEFAULT_DB_DRIVER: pgsql
+            ADMINER_DEFAULT_DB_HOST: db
+            ADMINER_DEFAULT_DB_NAME: adminer
+        depends_on:
+            - db
