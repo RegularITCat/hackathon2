@@ -7,7 +7,7 @@ services:
         environment:
             - APP_NAME=Tour.Hack2020_case5_backend
             - FLASK_APP=app.py
-        expose:
+        ports:
             - "80:80"
         depends_on:
             - db

@@ -3,3 +3,5 @@ src/venv
 env
 src/env
 *.swp
+*__pycache__/
+

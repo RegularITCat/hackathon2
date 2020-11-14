@@ -2,52 +2,33 @@
 # imports                              |
 #=======================================
 
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from hashlib import sha256
-
+import hashlib
+from os import path
+import json
+import time
 
 #=======================================
 # config                               |
 #=======================================
 
-current_path = os.path.dirname(os.path.realpath(__file__))
+current_path = path.dirname(path.realpath(__file__))
 
 #__CAUTION__NO__SQLITE__IN__PRODUCTION__
-#db_path = "sqlite:///test.db"
-db_path = "postgresql://adminer:adminer@db:5432/adminer"
+db_path = "sqlite:///test.db"
+#db_path = "postgresql://adminer:adminer@db:5432/adminer"
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'db.sqlite')
+app.config['SQLALCHEMY_DATABASE_URI'] = db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+migrete = Migrate(app, db)
 
 #=======================================
 # databases                            |
 #=======================================
-
-class User(db.Model):
-    """
-    this is user orm class
-    """
-    __tablename__ = "users"
-
-    id = db.Column(db.Integer, primary_key=True)
-    login = db.Column(db.String(256), unique=True)
-    hash_password = db.Column(db.String(1024))
-    role = db.Column(db.String(256))
-
-    def __init__(user_login, raw_pass, user_role="user", user_coordinates, path_id):
-        """Init of user class"""
-        self.login = user_login
-        self.hash_password = sha256(raw_pass).hexdigest()
-        self.role = user_role
-        self.coordinates = user_coordinates
-
-    paths = db.relationship("Path", secondary=users_paths_association, back_populate="users")
-
-
 
 # it this table we create
 # many to many relationships 
@@ -58,24 +39,43 @@ users_paths_association = db.Table(
     "users_paths", db.metadata,
     db.Column("user_id", db.Integer, db.ForeignKey("users.id")),
     db.Column("paths_id", db.Integer, db.ForeignKey("paths.id")),
-    db.Column("ready", db.Bool, nullable=False),
+    db.Column("ready", db.Boolean, nullable=False),
     db.Column("coordinate", db.String(128), nullable=False)
 )
+
+
+class User(db.Model):
+    """
+    this is user orm class
+    """
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    login = db.Column(db.String(256), unique=True)
+    hash_password = db.Column(db.String(1024))
+    role = db.Column(db.String(256))
+    paths = db.relationship("Path", secondary=users_paths_association, back_populates="users")
+    token = db.relationship("Token", uselist=False, back_populates="user")
+
 
 class Path(db.Model):
     """
     this is paths orm class
     """
     __tablename__ = "paths"
-
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.DateTime)
-    
-    def __init__(path_date):
-        """Init of path class"""
-        date = path_date
+    date = db.Column(db.DateTime())
+    users = db.relationship("User", secondary=users_paths_association, back_populates='paths')
 
-    users = db.relationship("User", secondary=users_paths_association, back_populate='paths')
+
+class Token(db.Model):
+    """
+    this is token orm class
+    """
+    __tablename__ = "tokens"
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.DateTime())
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    user = db.relationship("User", back_populates="token")
 
 #=======================================
 # user api routes                      |
@@ -87,16 +87,36 @@ def list_users():
     It should take nothing
     And return json array of all user's and their information
     """
-    pass
+    if request.content_type != "application/json":
+        return jsonify(response="json format required")
+    users = db.session.query(User).all()
+    data = []
+    for user in users:
+        data.append({"login" : user.login, "password" : user.hash_password})
+    return jsonify(data)
 
-@app.route("/user/", methods=["POST"])
+@app.route("/user/sign_up", methods=["POST"])
 def create_user():
     """
     It should be used for user creation
     so it takes all data from user model described earlier except id and relationships
     And return user's temporary jwt token ?
     """
-    pass
+    if request.content_type != "application/json":
+        return jsonify(response="json format required")
+
+    data = request.json
+    login = data["login"]
+    hash_password = raw_password_to_string(str(data["password"]))
+    role = "user"
+
+    db.session.add(User(login=login, hash_password=hash_password, role=role))
+    try:
+        db.session.commit()
+        return jsonify(status="ok")
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify(status="bad")
 
 @app.route("/user/", methods=["PUT"])
 def update_user():
@@ -113,6 +133,16 @@ def delete_user():
     And return nothing. just delete this user from database
     """
     pass
+
+@app.route("/user/signin", methods=["POST"])
+def sign_in():
+    if request.content_type != "application/json":
+        return jsonify(response="json format required")
+    data = request.json
+    login = data["login"]
+    hash_password = raw_password_to_string(str(data["password"]))
+    
+    user = db.session.query(User).filter(db.and_(User.login==login, User.hash_password==hash_password))
 
 #=======================================
 # path api routes                      |
@@ -162,7 +192,7 @@ def create_user_path_assoc():
     """
     pass
 
-@app.route("/users_paths/", methods=["GET"]):
+@app.route("/users_paths/", methods=["GET"])
 def return_array_of_user_paths():
     """
     here we should take user token and return all his paths
@@ -176,19 +206,30 @@ def delete_user_path_assoc():
     """
     pass
 
+@app.route("/")
+def index():
+    return "123"
+
 #=======================================
 # useful functions                     |
 #=======================================
 
-def raw_password_to_string():
+def raw_password_to_string(raw_string):
     """
     actually that's just pass hashing lol
     """
-    pass
+    return hashlib.sha256(str(raw_string).encode('utf-8')).hexdigest()
+
+def generate_token(login, password):
+    """
+    magic generation!
+    """
+    time = time.time()
+    return sha256(login + str(password) + str(time)).hexdigest()
 
 #=======================================
-# if main loop in development build    |
+# if code loop in development build    |
 #=======================================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8080)
 
