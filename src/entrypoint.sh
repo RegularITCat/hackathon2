@@ -15,4 +15,4 @@ echo "PostgreSQL started"
 flask db init
 flask db migrate
 flask db upgrade
-gunicorn -c gunicorn.py.ini app:app
+gunicorn -c gunicorn.conf.py app:app
