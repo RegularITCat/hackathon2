@@ -6,13 +6,13 @@
 
 ## Team members
 
-*@RegularITCat
+* @RegularITCat
 
-*@bigger777
+* @bigger777
 
-*@artebasher
+* @artebasher
 
-*@Pavel_Pichikov
+* @Pavel_Pichikov
 
 
 
