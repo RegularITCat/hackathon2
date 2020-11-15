@@ -5,7 +5,6 @@
 
 
 ## Team members
----
 
 *@RegularITCat
 
