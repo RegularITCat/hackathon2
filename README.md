@@ -40,4 +40,4 @@ well, the only who developed this is me
 ---
 рисунок схемы базы данных
 ![рисунок схемы базы данных](https://i.ibb.co/1LrX7dh/13.png)
-
+---
